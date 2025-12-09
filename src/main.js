@@ -47,6 +47,11 @@ async function main() {
                 return `https://www.azquotes.com/quotes/topics/${slug}.html`;
             }
             if (searchAuth) {
+                // For author search, start from the first letter of the author's name
+                const firstLetter = searchAuth.trim()[0].toLowerCase();
+                if (firstLetter && /[a-z]/.test(firstLetter)) {
+                    return `https://www.azquotes.com/quotes/authors/${firstLetter}/`;
+                }
                 return 'https://www.azquotes.com/quotes/authors.html';
             }
             if (letter) {
@@ -72,12 +77,12 @@ async function main() {
         // Extract quotes from HTML
         function extractQuotesFromPage($, pageUrl) {
             const quotes = [];
-            
+
             $('ul.list-quotes li').each((_, li) => {
                 try {
                     const $li = $(li);
                     const $block = $li.find('.wrap-block');
-                    
+
                     if (!$block.length) return;
 
                     // Extract quote text
@@ -125,22 +130,35 @@ async function main() {
         }
 
         // Find author links from listing pages
-        function findAuthorLinks($, baseUrl) {
+        function findAuthorLinks($, baseUrl, searchAuthorName = null) {
             const links = new Set();
-            
+
             $('a[href]').each((_, a) => {
                 const href = $(a).attr('href');
                 if (!href) return;
-                
+
                 // Match author URLs: /author/####-Author-Name
                 if (/\/author\/\d+-[A-Za-z-_]+/.test(href)) {
                     const abs = toAbs(href, baseUrl);
                     if (abs && !abs.includes('/tag/') && !abs.includes('/quote/')) {
-                        links.add(abs);
+                        // If searching for specific author, filter by name
+                        if (searchAuthorName) {
+                            const authorText = $(a).text().trim();
+                            const normalizedSearch = searchAuthorName.toLowerCase().replace(/\s+/g, '');
+                            const normalizedAuthor = authorText.toLowerCase().replace(/\s+/g, '');
+
+                            // Check if author name matches (partial or full match)
+                            if (normalizedAuthor.includes(normalizedSearch) || normalizedSearch.includes(normalizedAuthor)) {
+                                log.info(`✓ Found matching author: ${authorText} for search "${searchAuthorName}"`);
+                                links.add(abs);
+                            }
+                        } else {
+                            links.add(abs);
+                        }
                     }
                 }
             });
-            
+
             return [...links];
         }
 
@@ -148,24 +166,33 @@ async function main() {
         function findNextPage($, baseUrl) {
             // Try rel="next" link in HTML head
             const nextLink = $('link[rel="next"]').attr('href');
-            if (nextLink) return toAbs(nextLink, baseUrl);
-            
-            // Try pagination links
+            if (nextLink) {
+                const nextUrl = toAbs(nextLink, baseUrl);
+                log.debug(`Found next page via rel="next": ${nextUrl}`);
+                return nextUrl;
+            }
+
+            // Try pagination links in the page
             const currentPage = baseUrl.match(/[?&]p=(\d+)/);
             const currentPageNo = currentPage ? parseInt(currentPage[1], 10) : 1;
-            
-            // Look for next page link
+
+            // Look for next page link (try both query param formats)
             const nextPageNo = currentPageNo + 1;
             const nextPageLink = $(`a[href*="?p=${nextPageNo}"], a[href*="&p=${nextPageNo}"]`).first().attr('href');
-            if (nextPageLink) return toAbs(nextPageLink, baseUrl);
-            
+            if (nextPageLink) {
+                const nextUrl = toAbs(nextPageLink, baseUrl);
+                log.debug(`Found next page via pagination link: ${nextUrl}`);
+                return nextUrl;
+            }
+
+            log.debug(`No next page found for: ${baseUrl}`);
             return null;
         }
 
         // Fetch page with got-scraping
         async function fetchPage(pageUrl, proxyUrl = null) {
             await new Promise(resolve => setTimeout(resolve, randomDelay()));
-            
+
             const options = {
                 url: pageUrl,
                 headers: {
@@ -209,9 +236,9 @@ async function main() {
             const results = [];
 
             if (label === 'LIST') {
-                // Find author links
-                const authorLinks = findAuthorLinks($, pageUrl);
-                log.info(`LIST ${pageUrl} -> Found ${authorLinks.length} author links`);
+                // Find author links (filter by searchAuthor if provided)
+                const authorLinks = findAuthorLinks($, pageUrl, searchAuthor);
+                log.info(`LIST ${pageUrl} -> Found ${authorLinks.length} author links${searchAuthor ? ` matching "${searchAuthor}"` : ''}`);
 
                 for (const authorUrl of authorLinks) {
                     if (saved >= RESULTS_WANTED) break;
@@ -233,7 +260,7 @@ async function main() {
                 if (quotes.length > 0) {
                     const remaining = RESULTS_WANTED - saved;
                     const toSave = quotes.slice(0, Math.max(0, remaining));
-                    
+
                     if (toSave.length > 0) {
                         await Actor.pushData(toSave);
                         saved += toSave.length;
@@ -241,11 +268,14 @@ async function main() {
                     }
                 }
 
-                // Check for next page
+                // Check for next page (continue if we haven't reached the limit and there are more quotes)
                 if (saved < RESULTS_WANTED && pageNo < MAX_PAGES) {
                     const nextUrl = findNextPage($, pageUrl);
                     if (nextUrl) {
+                        log.info(`➜ Queueing next page: ${nextUrl} (page ${pageNo + 1})`);
                         results.push({ url: nextUrl, label: 'AUTHOR', pageNo: pageNo + 1 });
+                    } else {
+                        log.info(`No more pages found for author at page ${pageNo}`);
                     }
                 }
             }
@@ -262,10 +292,10 @@ async function main() {
 
         while (queue.length > 0 && saved < RESULTS_WANTED) {
             const { url, label, pageNo } = queue.shift();
-            
+
             try {
                 const newUrls = await processUrl(url, label, pageNo);
-                
+
                 // Add new URLs to queue (limit queue size)
                 for (const item of newUrls) {
                     if (saved >= RESULTS_WANTED) break;

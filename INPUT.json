@@ -1,9 +1,11 @@
 {
-  "startUrls": "https://www.azquotes.com/author/4399-Albert_Einstein",
-  "results_wanted": 10,
-  "max_pages": 2,
+  "searchAuthor": "Maya Angelou",
+  "results_wanted": 50,
+  "max_pages": 3,
   "proxyConfiguration": {
     "useApifyProxy": true,
-    "apifyProxyGroups": ["RESIDENTIAL"]
+    "apifyProxyGroups": [
+      "RESIDENTIAL"
+    ]
   }
 }
