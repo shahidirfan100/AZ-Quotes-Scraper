@@ -352,7 +352,7 @@ async function main() {
         // BFS queue processing
         const queue = initial.map(u => ({
             url: u,
-            label: /\/author\/\d+-/.test(u) ? 'AUTHOR' : 'LIST',
+            label: /(\/author\/\d+-|\/quotes\/topics\/)/.test(u) ? 'AUTHOR' : 'LIST',
             pageNo: 1,
         }));
 
