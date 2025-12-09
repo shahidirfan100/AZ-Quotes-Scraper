@@ -97,9 +97,9 @@ Configure the scraper using these input parameters:
     </tr>
     <tr>
       <td><code>startUrls</code></td>
-      <td>Array</td>
+      <td>String</td>
       <td>Multiple URLs to scrape</td>
-      <td><code>["url1", "url2"]</code></td>
+      <td><code>"url1\nurl2"</code></td>
     </tr>
   </tbody>
 </table>
@@ -175,10 +175,7 @@ Configure the scraper using these input parameters:
 
 ```json
 {
-  "startUrls": [
-    "https://www.azquotes.com/author/4399-Albert_Einstein",
-    "https://www.azquotes.com/author/15644-Oscar_Wilde"
-  ],
+  "startUrls": "https://www.azquotes.com/author/4399-Albert_Einstein\nhttps://www.azquotes.com/author/15644-Oscar_Wilde",
   "results_wanted": 150
 }
 ```

@@ -5,11 +5,11 @@
   "schemaVersion": 1,
   "properties": {
     "startUrls": {
-      "title": "Start URLs (Array)",
-      "type": "array",
-      "description": "Multiple AZ Quotes URLs to scrape. Provide an array of author or topic page URLs.",
-      "editor": "json",
-      "prefill": []
+      "title": "Start URLs",
+      "type": "string",
+      "description": "Multiple AZ Quotes URLs to scrape. Enter URLs separated by newlines or commas.",
+      "editor": "textarea",
+      "prefill": ""
     },
     "authorLetter": {
       "title": "Author Letter Filter",

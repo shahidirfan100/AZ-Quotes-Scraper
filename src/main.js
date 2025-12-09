@@ -43,6 +43,11 @@ async function main() {
         };
 
         const initial = [];
+        if (startUrls && typeof startUrls === 'string') {
+            // Parse string URLs separated by newlines or commas
+            const urls = startUrls.split(/[\n,]+/).map(url => url.trim()).filter(url => url);
+            initial.push(...urls);
+        }
         if (Array.isArray(startUrls) && startUrls.length) initial.push(...startUrls);
         if (startUrl) initial.push(startUrl);
         if (url) initial.push(url);
