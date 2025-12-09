@@ -208,31 +208,64 @@ async function main() {
                     },
                     responseType: 'text',
                     timeout: {
-                        request: 30000, // 30 second timeout
+                        request: 10000, // Reduced to 10 seconds
                     },
                     retry: {
                         limit: 0, // We handle retries manually
                     },
+                    // Throw on error to catch 5xx responses
+                    throwHttpErrors: true,
                 };
 
-                if (proxyUrl) {
+                // Use proxy only if provided and not disabled by previous failures
+                const useProxy = proxyUrl && (attempt === 1 || !options.proxyFallbackTriggered);
+
+                if (useProxy) {
                     options.proxyUrl = proxyUrl;
                 }
 
                 try {
-                    log.debug(`Fetching ${pageUrl} (attempt ${attempt}/${retries})${proxyUrl ? ' via proxy' : ''}`)
-                        ;
-                    const response = await gotScraping(options);
+                    log.debug(`Fetching ${pageUrl} (attempt ${attempt}/${retries})${useProxy ? ' via proxy' : ' direct'}`);
+
+                    // Create a strict timeout promise
+                    const timeoutPromise = new Promise((_, reject) => {
+                        setTimeout(() => reject(new Error('StrictTimeout')), 10000); // 10s strict timeout
+                    });
+
+                    // Race between request and strict timeout
+                    const response = await Promise.race([
+                        gotScraping(options),
+                        timeoutPromise
+                    ]);
+
                     return response.body;
                 } catch (err) {
                     const isLastAttempt = attempt === retries;
 
-                    if (err.name === 'TimeoutError' || err.message.includes('Timeout')) {
-                        log.warning(`Timeout on ${pageUrl} (attempt ${attempt}/${retries})`);
+                    // Check for various error types including strict timeout and proxy errors
+                    const isTimeout = err.message === 'StrictTimeout' || err.name === 'TimeoutError' || err.message.includes('Timeout');
+                    const isProxyError = err.response && (err.response.statusCode >= 500 || err.response.statusCode === 403 || err.response.statusCode === 407);
+                    const isNetworkError = err.code === 'ECONNRESET' || err.code === 'ETIMEDOUT';
 
-                        // If using proxy and got timeout, try without proxy on last attempt
-                        if (isLastAttempt && proxyUrl) {
-                            log.info(`Retrying without proxy: ${pageUrl}`);
+                    if (isTimeout || isProxyError || isNetworkError) {
+                        const errorType = isTimeout ? 'Timeout' : (isProxyError ? `Proxy Error ${err.response.statusCode}` : `Network Error ${err.code}`);
+                        log.warning(`${errorType} on ${pageUrl} (attempt ${attempt}/${retries})`);
+
+                        // Aggressive Fallback: If proxy failed in ANY way, try direct connection immediately on next attempt
+                        if (proxyUrl && attempt < retries) {
+                            log.info(`Proxy failed. Switching to direct connection for next attempt.`);
+                            options.proxyFallbackTriggered = true;
+                            // Disable proxy for next loop iteration
+                            proxyUrl = null;
+                        }
+                    } else {
+                        log.warning(`Error fetching ${pageUrl} (attempt ${attempt}/${retries}): ${err.message}`);
+                    }
+
+                    if (isLastAttempt) {
+                        // Final fallback attempt without proxy if we haven't tried it yet
+                        if (proxyUrl && (isTimeout || isProxyError || isNetworkError)) {
+                            log.info(`Final attempt failed with proxy. Trying one last time direct: ${pageUrl}`);
                             try {
                                 options.proxyUrl = undefined;
                                 const response = await gotScraping(options);
@@ -242,18 +275,13 @@ async function main() {
                                 throw fallbackErr;
                             }
                         }
-                    } else {
-                        log.warning(`Error fetching ${pageUrl} (attempt ${attempt}/${retries}): ${err.message}`);
-                    }
 
-                    if (isLastAttempt) {
                         log.error(`Failed to fetch ${pageUrl} after ${retries} attempts: ${err.message}`);
                         throw err;
                     }
 
-                    // Exponential backoff before retry
-                    const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
-                    log.debug(`Waiting ${backoffMs}ms before retry...`);
+                    // Exponential backoff before retry (reduced for faster startup)
+                    const backoffMs = Math.min(500 * Math.pow(2, attempt - 1), 2000);
                     await new Promise(resolve => setTimeout(resolve, backoffMs));
                 }
             }
