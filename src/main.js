@@ -13,7 +13,7 @@ const USER_AGENTS = [
 ];
 
 const randomUserAgent = () => USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-const randomDelay = () => Math.floor(Math.random() * 300) + 200; // 200-500ms
+const randomDelay = () => Math.floor(Math.random() * 150) + 100; // 100-250ms (faster)
 
 await Actor.init();
 
@@ -189,35 +189,73 @@ async function main() {
             return null;
         }
 
-        // Fetch page with got-scraping
-        async function fetchPage(pageUrl, proxyUrl = null) {
+        // Fetch page with got-scraping (with retry logic)
+        async function fetchPage(pageUrl, proxyUrl = null, retries = 3) {
             await new Promise(resolve => setTimeout(resolve, randomDelay()));
 
-            const options = {
-                url: pageUrl,
-                headers: {
-                    'User-Agent': randomUserAgent(),
-                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-                    'Accept-Language': 'en-US,en;q=0.9',
-                    'Accept-Encoding': 'gzip, deflate, br',
-                    'Referer': 'https://www.azquotes.com/',
-                    'DNT': '1',
-                    'Connection': 'keep-alive',
-                    'Upgrade-Insecure-Requests': '1',
-                },
-                responseType: 'text',
-            };
+            for (let attempt = 1; attempt <= retries; attempt++) {
+                const options = {
+                    url: pageUrl,
+                    headers: {
+                        'User-Agent': randomUserAgent(),
+                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language': 'en-US,en;q=0.9',
+                        'Accept-Encoding': 'gzip, deflate, br',
+                        'Referer': 'https://www.azquotes.com/',
+                        'DNT': '1',
+                        'Connection': 'keep-alive',
+                        'Upgrade-Insecure-Requests': '1',
+                    },
+                    responseType: 'text',
+                    timeout: {
+                        request: 30000, // 30 second timeout
+                    },
+                    retry: {
+                        limit: 0, // We handle retries manually
+                    },
+                };
 
-            if (proxyUrl) {
-                options.proxyUrl = proxyUrl;
-            }
+                if (proxyUrl) {
+                    options.proxyUrl = proxyUrl;
+                }
 
-            try {
-                const response = await gotScraping(options);
-                return response.body;
-            } catch (err) {
-                log.error(`Failed to fetch ${pageUrl}: ${err.message}`);
-                throw err;
+                try {
+                    log.debug(`Fetching ${pageUrl} (attempt ${attempt}/${retries})${proxyUrl ? ' via proxy' : ''}`)
+                        ;
+                    const response = await gotScraping(options);
+                    return response.body;
+                } catch (err) {
+                    const isLastAttempt = attempt === retries;
+
+                    if (err.name === 'TimeoutError' || err.message.includes('Timeout')) {
+                        log.warning(`Timeout on ${pageUrl} (attempt ${attempt}/${retries})`);
+
+                        // If using proxy and got timeout, try without proxy on last attempt
+                        if (isLastAttempt && proxyUrl) {
+                            log.info(`Retrying without proxy: ${pageUrl}`);
+                            try {
+                                options.proxyUrl = undefined;
+                                const response = await gotScraping(options);
+                                return response.body;
+                            } catch (fallbackErr) {
+                                log.error(`Failed even without proxy ${pageUrl}: ${fallbackErr.message}`);
+                                throw fallbackErr;
+                            }
+                        }
+                    } else {
+                        log.warning(`Error fetching ${pageUrl} (attempt ${attempt}/${retries}): ${err.message}`);
+                    }
+
+                    if (isLastAttempt) {
+                        log.error(`Failed to fetch ${pageUrl} after ${retries} attempts: ${err.message}`);
+                        throw err;
+                    }
+
+                    // Exponential backoff before retry
+                    const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 5000);
+                    log.debug(`Waiting ${backoffMs}ms before retry...`);
+                    await new Promise(resolve => setTimeout(resolve, backoffMs));
+                }
             }
         }
 
@@ -292,6 +330,8 @@ async function main() {
 
         while (queue.length > 0 && saved < RESULTS_WANTED) {
             const { url, label, pageNo } = queue.shift();
+
+            log.debug(`Queue: ${queue.length} remaining, processing ${label} page ${pageNo}`);
 
             try {
                 const newUrls = await processUrl(url, label, pageNo);
