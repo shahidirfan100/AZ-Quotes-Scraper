@@ -1,0 +1,65 @@
+{
+  "title": "AZ Quotes Scraper",
+  "description": "Extract inspirational quotes from AZ Quotes. Search by author letter, specific author name, or topic. Scraper efficiently collects quotes with author information, tags, and popularity metrics.",
+  "type": "object",
+  "schemaVersion": 1,
+  "properties": {
+    "startUrls": {
+      "title": "Start URLs (Array)",
+      "type": "array",
+      "description": "Multiple AZ Quotes URLs to scrape. Provide an array of author or topic page URLs.",
+      "editor": "json",
+      "prefill": []
+    },
+    "authorLetter": {
+      "title": "Author Letter Filter",
+      "type": "string",
+      "description": "Filter authors by first letter (A-Z). For example, 'a' will scrape authors starting with 'A'. Leave empty to browse all authors.",
+      "editor": "textfield",
+      "prefill": "a",
+      "pattern": "^[a-zA-Z]?$"
+    },
+    "searchAuthor": {
+      "title": "Search Author Name",
+      "type": "string",
+      "description": "Search for a specific author by name (e.g., 'Albert Einstein', 'Maya Angelou'). The scraper will find matching author pages.",
+      "editor": "textfield",
+      "example": "Albert Einstein"
+    },
+    "topic": {
+      "title": "Quote Topic",
+      "type": "string",
+      "description": "Filter quotes by topic/category (e.g., 'inspirational', 'love', 'life', 'success', 'wisdom'). Leave empty to scrape by author instead.",
+      "editor": "textfield",
+      "example": "inspirational"
+    },
+    "results_wanted": {
+      "title": "Maximum Number of Quotes",
+      "type": "integer",
+      "description": "Maximum number of quotes to collect. The scraper will stop after reaching this limit.",
+      "minimum": 1,
+      "default": 100,
+      "editor": "number"
+    },
+    "max_pages": {
+      "title": "Maximum Number of Pages",
+      "type": "integer",
+      "description": "Safety limit on the number of pages to visit per author or topic. Prevents excessive crawling.",
+      "minimum": 1,
+      "editor": "number",
+      "default": 10
+    },
+    "proxyConfiguration": {
+      "title": "Proxy Configuration",
+      "type": "object",
+      "description": "Configure proxy settings. Recommended to use Apify Proxy (residential or datacenter) to avoid rate limiting.",
+      "editor": "proxy",
+      "default": {
+        "useApifyProxy": true,
+        "apifyProxyGroups": ["RESIDENTIAL"]
+      }
+    }
+  },
+  "required": [],
+  "additionalProperties": false
+}

@@ -1,0 +1,11 @@
+{
+  "authorLetter": "a",
+  "searchAuthor": "",
+  "topic": "",
+  "results_wanted": 100,
+  "max_pages": 5,
+  "proxyConfiguration": {
+    "useApifyProxy": true,
+    "apifyProxyGroups": ["RESIDENTIAL"]
+  }
+}

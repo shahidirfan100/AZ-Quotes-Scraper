@@ -1,0 +1,43 @@
+{
+  "actorSpecification": 1,
+  "fields": {},
+  "views": {
+    "overview": {
+      "title": "Overview",
+      "transformation": {
+        "fields": [
+          "quote",
+          "author",
+          "tags",
+          "likes",
+          "author_url"
+        ]
+      },
+      "display": {
+        "component": "table",
+        "properties": {
+          "quote": {
+            "label": "Quote",
+            "format": "text"
+          },
+          "author": {
+            "label": "Author",
+            "format": "text"
+          },
+          "tags": {
+            "label": "Tags",
+            "format": "text"
+          },
+          "likes": {
+            "label": "Likes",
+            "format": "text"
+          },
+          "author_url": {
+            "label": "Author URL",
+            "format": "link"
+          }
+        }
+      }
+    }
+  }
+}
